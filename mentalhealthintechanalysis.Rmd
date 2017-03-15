@@ -1,0 +1,294 @@
+---
+title: "Mental Health in Tech Survey Analysis"
+output: html_notebook
+---
+
+```{r}
+#imports
+library(ggplot2)
+library(reshape2)
+library(scales)
+library(gridExtra)
+library(party)
+library(caret)
+library(rpart.plot)
+library(ineq)
+```
+
+Information about the data
+
+Timestamp
+
+Age
+
+Gender
+
+Country
+
+state: If you live in the United States, which state or territory do you live in?
+
+self_employed: Are you self-employed?
+
+family_history: Do you have a family history of mental illness?
+
+treatment: Have you sought treatment for a mental health condition?
+
+work_interfere: If you have a mental health condition, do you feel that it interferes with your work?
+
+no_employees: How many employees does your company or organization have?
+
+remote_work: Do you work remotely (outside of an office) at least 50% of the time?
+
+tech_company: Is your employer primarily a tech company/organization?
+
+benefits: Does your employer provide mental health benefits?
+
+care_options: Do you know the options for mental health care your employer provides?
+
+wellness_program: Has your employer ever discussed mental health as part of an employee wellness program?
+
+seek_help: Does your employer provide resources to learn more about mental health issues and how to seek help?
+
+anonymity: Is your anonymity protected if you choose to take advantage of mental health or substance abuse treatment resources?
+
+leave: How easy is it for you to take medical leave for a mental health condition?
+
+mental_health_consequence: Do you think that discussing a mental health issue with your employer would have negative consequences?
+
+phys_health_consequence: Do you think that discussing a physical health issue with your employer would have negative consequences?
+
+coworkers: Would you be willing to discuss a mental health issue with your coworkers?
+
+supervisor: Would you be willing to discuss a mental health issue with your direct supervisor(s)?
+
+mental_health_interview: Would you bring up a mental health issue with a potential employer in an interview?
+
+phys_health_interview: Would you bring up a physical health issue with a potential employer in an interview?
+
+mental_vs_physical: Do you feel that your employer takes mental health as seriously as physical health?
+
+obs_consequence: Have you heard of or observed negative consequences for coworkers with mental health conditions in your workplace?
+
+comments: Any additional notes or comments
+
+```{r}
+#set working directory and reads csv into dataframe
+setwd("C:\\Users\\Owner\\Desktop\\gitstuff\\Data Analysis Projects\\Mental Health in Tech Survey")
+df<-read.csv(file = "survey.csv", header=TRUE, sep=",", stringsAsFactors = FALSE)
+
+```
+
+
+```{r}
+female <- c('Female','female','Woman','f','F','cis-female/femme','Female (cis)','Femail','femail','F','femake','Femake','Cis Female','woman')
+male <-c('Male','male','maile','Cis Male','Male (CIS)','Mail','cis male','Cis Man','Man','man','M','m')
+transgenderFemale <- c('Trans-female','Trans woman','Female (trans)')
+transgenderMale <- c('male-ish','something kinda male?','Guy (-ish) ^_^')
+androgenous <- c('Androgyne','male leaning androgynous')
+nonbinary <- c('queer/she/they','non-binary','gender fluid','fluid','Genderqueer','genderqueer','Agender','Neuter','queer','Enby', 'All')
+```
+
+```{r}
+#Gender data not consistent. Changed all gender values to either F, M, TF, TM, A or NB
+for(i in 1:nrow(df)) {
+  if (df[i,"Gender"] %in% female) {
+    df[i, "Gender"]<-"F"
+  } else if(df[i, "Gender"] %in% male) {
+    df[i, "Gender"]<-"M"
+  } else if (df[i, "Gender"] %in% transgenderFemale) {
+    df[i, "Gender"]<-"TF"
+  } else if (df[i, "Gender"] %in% transgenderMale) {
+    df[i, "Gender"]<-"TM"
+  } else if (df[i, "Gender"] %in% androgenous) {
+    df[i, "Gender"]<-"A"
+  } else {
+    df[i, "Gender"]<-"NB"
+  }
+    
+}
+
+#no_employees data was inconsistent, changed any dates to real numbers
+for (i in 1:nrow(df)) {
+  if (df[i, "no_employees"]=="25-Jun")
+  {
+    df[i, "no_employees"]<-"6-25"
+  } else if(df[i, "no_employees"]=="5-Jan")
+  {
+    df[i, "no_employees"]<-"1-5"
+  }
+  
+}
+
+#We only want to look at United States Tech Industry since
+df<-df[df$Country=="United States",]
+df<-df[!(df$state %in% c("ME", "NV")),]
+df
+```
+
+```{r}
+#Is the prevalence of mental illness greater in tech-primary companies or non-tech primary companies?
+treatment<-c(0,0,0,0)
+#treatment[1]=if person is in a tech company and seeked treatment
+#treatment[2]=if person is not in a tech company and seeked treatment
+#treatment[3]=if person is in a tech company and did not seek treatment
+#treatment[4]=if person is not in a tech company and did not seek treatment
+
+for (i in 1:nrow(df))
+{
+  if (df[i, "tech_company"]=="Yes" && df[i, "treatment"] == "Yes")
+  {
+    treatment[1]<-treatment[1]+1
+  } else if (df[i, "tech_company"]=="Yes" && df[i, "treatment"] == "No")
+  {
+    treatment[2]<-treatment[2]+1
+  } else if (df[i, "tech_company"]=="No" && df[i, "treatment"] == "Yes")
+  {
+    treatment[3]<-treatment[3]+1
+  } else {
+    treatment[4]<-treatment[4]+1
+  }
+}
+
+#Is the prevalence of mental illness greater in males, females, nonbinary, androgenous or transgender?
+gender_Treatment=c(0,0,0,0,0,0,0,0,0,0,0,0)
+#treatment[1]=if person is a male and seeked treatment
+#treatment[2]=if person is a male and did not seek treatment
+#treatment[3]=if person is a female and seeked treatment
+#treatment[4]=if person is a female and did not seek treatment
+#treatment[5]=if person is a transgender female and seeked treatment
+#treatment[6]=if person is a transgender female and did not seek treatment
+#treatment[7]=if a person is a trangender male and did seek treatment
+#treatment[8]=if a person is transgender male and did not seek treatment
+#treatment[9]=if a person is androgenous and did seek treatment
+#treatment[10]=if a person is androgenous and did not seek treatment
+#treatment[11]=if a person is nonbinary and did seek treatment
+#treatment[12]=if a person is nonbinary and did not seek treatment
+for (i in 1:nrow(df))
+{
+  if (df[i, "Gender"]=="M" && df[i, "treatment"]=="Yes")
+  {
+    gender_Treatment[1]=gender_Treatment[1]+1
+  } else if (df[i, "Gender"]=="M" && df[i, "treatment"]=="No")
+  {
+    gender_Treatment[2]=gender_Treatment[2]+1
+  } else if (df[i, "Gender"]=="F" && df[i, "treatment"]=="Yes")
+  {
+    gender_Treatment[3]=gender_Treatment[3]+1
+  } else if (df[i, "Gender"]=="F" && df[i, "treatment"]=="No")
+  {
+    gender_Treatment[4]=gender_Treatment[4]+1
+  } else if (df[i, "Gender"]=="TF" && df[i, "treatment"]=="Yes")
+  {
+    gender_Treatment[5]=gender_Treatment[5]+1
+  } else if (df[i, "Gender"]=="TF" && df[i, "treatment"]=="No")
+  {
+    gender_Treatment[6]=gender_Treatment[6]+1
+  } else if (df[i, "Gender"]=="TM" && df[i, "treatment"]=="Yes")
+  {
+    gender_Treatment[7]=gender_Treatment[7]+1
+  } else if (df[i, "Gender"]=="TM" && df[i, "treatment"]=="No")
+  {
+    gender_Treatment[8]=gender_Treatment[8]+1
+  } else if (df[i, "Gender"]=="A" && df[i, "treatment"]=="Yes")
+  {
+    gender_Treatment[9]=gender_Treatment[9]+1
+  } else if (df[i, "Gender"]=="A" && df[i, "treatment"]=="No")
+  {
+    gender_Treatment[10]=gender_Treatment[10]+1
+  } else if (df[i, "Gender"]=="NB" && df[i, "treatment"]=="Yes")
+  {
+    gender_Treatment[11]=gender_Treatment[11]+1
+  } else
+  {
+    gender_Treatment[12]=gender_Treatment[12]+1
+  }
+}
+```
+
+```{r}
+treatmentdf = melt(data.frame(yes=treatment[c(1,3)], no=treatment[c(2,4)], 
+          Type_of_company=c("Tech Company", "Nontech Company")),
+          variable.name="treatment",value.name = "Responses")
+ggplot(treatmentdf, aes(Type_of_company, Responses, fill=treatment)) + 
+       geom_bar(position="dodge", stat = "identity") + ggtitle("Nontech and Tech Company Employees That Did or \n Did Not Received Treatment")
+```
+
+It seems that there were more people willing to get treatment in both tech and nontech companies but the nontech company difference is much smaller. This could also be due to a smaller pool of data.
+
+```{r}
+#creates dataframe of each gender and whether they got treatment or not
+maleTreatment<-data.frame(group = c("Yes","No"), value = gender_Treatment[c(1,2)])
+femaleTreatment<- data.frame(group = c("Yes","No"), value = gender_Treatment[c(3,4)])
+transgenderFemaleTreatment<- data.frame(group = c("Yes","No"), value = gender_Treatment[c(5,6)])
+transgenderMaleTreatment<- data.frame(group = c("Yes","No"), value = gender_Treatment[c(7,8)])
+androgyneTreatment<- data.frame(group = c("Yes","No"), value = gender_Treatment[c(9,10)])
+nonbinaryTreatment<- data.frame(group = c("Yes","No"), value = gender_Treatment[c(11,12)])
+
+
+#Creates pie chart for each gender on whether they got treatment or not
+malePie <-ggplot(maleTreatment, aes(x="", y=value, fill=group))+
+geom_bar(width = 1, stat = "identity") + coord_polar("y", start=0) + theme(axis.text.x=element_blank()) +
+geom_text(aes(y = value/3 + c(0, cumsum(value)[-length(value)]), label = round((value/sum(gender_Treatment[c(1,2)]))*100,2)),size=3)+ggtitle("Males") + theme(plot.title = element_text(size = 10))
+
+femalePie <-ggplot(femaleTreatment, aes(x="", y=value, fill=group))+
+geom_bar(width = 1, stat = "identity") + coord_polar("y", start=0) + theme(axis.text.x=element_blank()) +
+geom_text(aes(y = value/3 + c(0, cumsum(value)[-length(value)]), label = round((value/sum(gender_Treatment[c(3,4)]))*100,2)),size=3)+ggtitle("Females") + theme(plot.title = element_text(size = 10))
+
+transgenderFemalePie <-ggplot(transgenderFemaleTreatment, aes(x="", y=value, fill=group))+
+geom_bar(width = 1, stat = "identity") + coord_polar("y", start=0) + theme(axis.text.x=element_blank()) +
+geom_text(aes(y = value/3 + c(0, cumsum(value)[-length(value)]), label = round((value/sum(gender_Treatment[c(5,6)]))*100,2)),size=3)+ggtitle("Transgender Female")+ theme(plot.title = element_text(size = 10))
+
+transgenderMalePie <-ggplot(transgenderMaleTreatment, aes(x="", y=value, fill=group))+
+geom_bar(width = 1, stat = "identity") + coord_polar("y", start=0) + theme(axis.text.x=element_blank()) +
+geom_text(aes(y = value/3 + c(0, cumsum(value)[-length(value)]), label = round((value/sum(gender_Treatment[c(7,8)]))*100,2)),size=3)+ggtitle("Transgender Male")+ theme(plot.title = element_text(size = 10))
+
+androgynePie <-ggplot(androgyneTreatment, aes(x="", y=value, fill=group))+
+geom_bar(width = 1, stat = "identity") + coord_polar("y", start=0) + theme(axis.text.x=element_blank()) +
+geom_text(aes(y = value/3 + c(0, cumsum(value)[-length(value)]), label = round((value/sum(gender_Treatment[c(9,10)]))*100,2)),size=3)+ggtitle("Androgyne") + theme(plot.title = element_text(size = 10))
+
+nonbinaryPie <-ggplot(nonbinaryTreatment, aes(x="", y=value, fill=group))+
+geom_bar(width = 1, stat = "identity") + coord_polar("y", start=0) + theme(axis.text.x=element_blank()) +
+geom_text(aes(y = value/3 + c(0, cumsum(value)[-length(value)]), label = round((value/sum(gender_Treatment[c(11,12)]))*100,2)),size=3)+ggtitle("Nonbinary") + theme(plot.title = element_text(size = 10))
+
+#creates subplot
+grid.arrange(malePie, femalePie, nonbinaryPie, ncol=2, top = "Percentage of Gender That Said Yes or No to Treatment")
+```
+
+What is interesting to note is that before any country that was not the United States was included in the dataframe, transgenders and androgynes were included. However, once those countries were removed then it seems those categories disappeared but nonbinary remained. This could be for several reasons, such as countries outside the US are more excepting of transgenders and androgynes. However, what we can only say for sure is that in this survey, people outside of the US were more likely to call themselves transgender or androgyne.
+
+However it is interesting to note that both females and nonbinary individuals were much more likely to get treatment than men, where both females and nonbinary individuals had a 3 out of 4 chance.
+
+```{r}
+#remove unwanted dataframe column(s)
+drops = c("Timestamp", "comments","Country","state")
+newdf <- df[, !(names(df) %in% drops)]
+inTrain <- createDataPartition(y = newdf$treatment, p = 0.75, list = FALSE)
+
+#Remove any rows that do not have the united states as 
+
+#split into training and testing
+training <- newdf[inTrain,]
+testing <- newdf[-inTrain,]
+
+```
+
+Run CART algorithm on the data to see if we can predict whether treatment will be taken up by an employee
+
+```{r}
+modelTree<-rpart(treatment ~., data = training)
+predictTree <- predict(modelTree,testing,type = "class")
+#generate confusion matrix
+confMat <- table(testing$treatment,predictTree)
+accuracy <- sum(diag(confMat))/sum(confMat)
+accuracy
+```
+
+```{r}
+rpart.plot::rpart.plot(modelTree)
+```
+
+What we can see is that our decision tree has 80% accuracy on the testing set, which is pretty good. Using this decision tree, we can accurately see what factors can lead to someone getting or not getting treatment.
+
+
+
+
